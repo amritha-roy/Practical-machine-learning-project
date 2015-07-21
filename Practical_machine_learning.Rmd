@@ -1,0 +1,80 @@
+---
+title: "Machine Learning Algortithm -> Personal Activiy Monitor"
+author: "Amritha Anna Roy"
+date: "20 July 2015"
+output: html_document
+---
+##Machine Learning Algorithm
+#-Amritha Anna Roy
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The links for the training and test data are given below:
+
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+First of all we load them.
+
+```{r}
+if (!file.exists("pmlTraining.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                  destfile = "pmlTraining.csv")
+}
+if (!file.exists("pmlTesting.csv")) {
+    download.file("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                  destfile = "pmlTesting.csv")
+}
+
+pmlTraining <- read.csv("pmlTraining.csv", header = TRUE, na.strings = c("NA",""))
+pmlTesting <- read.csv("pmlTesting.csv", header = TRUE, na.strings = c("NA",""))
+```
+
+By observing the datasets, we can see, that there are a lot of variables, that are mostly NA (e.g. *kurtosis_roll_belt*, *avg_roll_arm*). Let's remove these variables from the dataset, so that we are left with variables that do not have NAs. In addition, I also decided to remove variables such as *X*, *user_name*, timestamps and *new_window*, because they do not seem like good predictors for the manner of doing an exercise.
+
+```{r}
+NAs <- apply(pmlTraining, 2, function(x) { sum(is.na(x)) })
+pmlTrainingCleaned <- pmlTraining[, which(NAs == 0)]
+pmlTestingCleaned <- pmlTesting[, which(NAs == 0)]
+
+pmlTrainingCleaned <- subset(pmlTrainingCleaned, select=-c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window))
+pmlTestingCleaned <- subset(pmlTestingCleaned, select=-c(X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window))
+```
+
+```{r}
+dim(pmlTrainingCleaned)
+dim(pmlTestingCleaned)
+```
+
+Now we split the training dataset into training and validation parts and train a random forest classifier.
+
+```{r}
+suppressMessages(library(caret))
+# library(caret)
+trainIndices <- createDataPartition(pmlTrainingCleaned$classe, p=0.7, list=F)
+pmlTrainingCleaned_train <- pmlTrainingCleaned[trainIndices,]
+pmlTrainingCleaned_valid <- pmlTrainingCleaned[-trainIndices,]
+
+suppressWarnings(
+suppressMessages(
+  fit <- train(classe ~ ., 
+               data=pmlTrainingCleaned_train,
+               method="rf",
+               trControl=trainControl(method="cv", number=4),
+               verbose=F)
+))
+```
+
+Let's check the accuracy on the validation set.
+
+```{r}
+predicted <- predict(fit, pmlTrainingCleaned_valid)
+accuracy <- sum(predicted == pmlTrainingCleaned_valid$classe) / length(predicted)
+```
+
+This means we achieved `r 100*accuracy`% accuracy on the validation set.
+
+The predictions for the test set are:
+
+```{r}
+predict(fit, pmlTestingCleaned)
